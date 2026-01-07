@@ -7,9 +7,13 @@ let userMarker = null;
 let headingLine = null;
 let watchId = null;
 let lastPos = null;
+let currentHeading = null;
+let lineVisible = false;
 
 const startBtn = document.getElementById('startBtn');
 const statusEl = document.getElementById('status');
+const showBtn = document.getElementById('showBtn');
+const resetBtn = document.getElementById('resetBtn');
 
 function setStatus(s){ statusEl.textContent = s; }
 
@@ -27,13 +31,16 @@ function destLatLng(lat, lon, bearingDeg, distanceMeters){
 function updateLine(position, heading){
   const lat = position.coords.latitude;
   const lon = position.coords.longitude;
-  const distance = 2000; // meters: adjust line length
+  const distance = 20000000; // 20,000 km
   const dest = destLatLng(lat, lon, heading, distance);
+
   if (userMarker) userMarker.setLatLng([lat, lon]);
   else userMarker = L.marker([lat, lon]).addTo(map);
+
   if (headingLine) headingLine.setLatLngs([[lat, lon], dest]);
   else headingLine = L.polyline([[lat, lon], dest], { color: 'red', weight: 4 }).addTo(map);
-  if (!map.getBounds().contains([lat, lon])) map.setView([lat, lon], 16);
+
+  if (!map.getBounds().contains([lat, lon])) map.setView([lat, lon], 5);
 }
 
 async function requestDeviceOrientationPermission(){
@@ -49,13 +56,19 @@ async function requestDeviceOrientationPermission(){
 }
 
 function handleOrientationEvent(e){
-  // alpha is rotation around Z axis (degrees). Might need calibration per device.
   let heading = e.alpha;
   if (typeof heading !== 'number') return;
-  // adjust for screen orientation
+
   const screenAngle = (screen.orientation && screen.orientation.angle) || 0;
-  heading = (heading - screenAngle + 360) % 360;
-  if (lastPos) updateLine(lastPos, heading);
+
+  // invert direction
+  heading = (-heading - screenAngle + 360) % 360;
+
+  currentHeading = heading;
+
+  if (lastPos && lineVisible) {
+    updateLine(lastPos, currentHeading);
+  }
 }
 
 function start() {
@@ -85,8 +98,29 @@ function start() {
     } else {
       setStatus('Geolocation not supported.');
     }
+  showBtn.disabled = false;
+  resetBtn.disabled = false;
   });
 }
+
+showBtn.addEventListener('click', ()=>{
+  if (!lastPos || currentHeading == null) {
+    setStatus("Aspetto posizione & bussola…");
+    return;
+  }
+  lineVisible = true;
+  updateLine(lastPos, currentHeading);
+});
+
+resetBtn.addEventListener('click', ()=>{
+  lineVisible = false;
+  if (headingLine) {
+    map.removeLayer(headingLine);
+    headingLine = null;
+  }
+  setStatus("Linea nascosta. Puoi premere 'Mostra linea' di nuovo.");
+});
+
 
 startBtn.addEventListener('click', start);
 
