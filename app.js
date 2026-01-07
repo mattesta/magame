@@ -27,7 +27,7 @@ function destLatLng(lat, lon, bearingDeg, distanceMeters){
 function updateLine(position, heading){
   const lat = position.coords.latitude;
   const lon = position.coords.longitude;
-  const distance = 2000; // meters: adjust line length
+  const distance = 20000000; // meters: adjust line length
   const dest = destLatLng(lat, lon, heading, distance);
   if (userMarker) userMarker.setLatLng([lat, lon]);
   else userMarker = L.marker([lat, lon]).addTo(map);
