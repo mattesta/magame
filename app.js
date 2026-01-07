@@ -1,4 +1,4 @@
-const map = L.map('map', { zoomControl: true, worldCopyJump: true });
+const map = L.map('map', { zoomControl: true });
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19, attribution: '&copy; OpenStreetMap'
 }).addTo(map);
@@ -54,7 +54,7 @@ function handleOrientationEvent(e){
   if (typeof heading !== 'number') return;
   // adjust for screen orientation
   const screenAngle = (screen.orientation && screen.orientation.angle) || 0;
-  heading = -((heading - screenAngle + 360) % 360);
+  heading = - ((heading - screenAngle + 360) % 360);
   if (lastPos) updateLine(lastPos, heading);
 }
 
