@@ -27,12 +27,12 @@ function destLatLng(lat, lon, bearingDeg, distanceMeters){
 function updateLine(position, heading){
   const lat = position.coords.latitude;
   const lon = position.coords.longitude;
-  const distance = 2000; // meters: adjust line length
+  const distance = 40000000; // meters: adjust line length
   const dest = destLatLng(lat, lon, heading, distance);
   if (userMarker) userMarker.setLatLng([lat, lon]);
   else userMarker = L.marker([lat, lon]).addTo(map);
   if (headingLine) headingLine.setLatLngs([[lat, lon], dest]);
-  else headingLine = L.polyline([[lat, lon], dest], { color: 'red', weight: 4 }).addTo(map);
+  else headingLine = L.polyline([[lat, lon], dest], { color: 'red', weight: 2 }).addTo(map);
   if (!map.getBounds().contains([lat, lon])) map.setView([lat, lon], 16);
 }
 
@@ -54,7 +54,7 @@ function handleOrientationEvent(e){
   if (typeof heading !== 'number') return;
   // adjust for screen orientation
   const screenAngle = (screen.orientation && screen.orientation.angle) || 0;
-  heading = (heading - screenAngle + 360) % 360;
+  heading = (heading - screenAngle + 180) % 360;
   if (lastPos) updateLine(lastPos, heading);
 }
 
