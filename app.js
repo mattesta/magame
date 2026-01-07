@@ -33,7 +33,7 @@ function destLatLng(lat, lon, bearingDeg, distanceMeters){
 function updateLine(position, heading){
   const lat = position.coords.latitude;
   const lon = position.coords.longitude;
-  const distance = 20000000; // 20,000 km
+  const distance = 200000000; // 20,000 km
   const dest = destLatLng(lat, lon, heading, distance);
 
   if (userMarker) userMarker.setLatLng([lat, lon]);
