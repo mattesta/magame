@@ -9,6 +9,8 @@ let watchId = null;
 let lastPos = null;
 let currentHeading = null;
 let lineVisible = false;
+let lineLocked = false;
+
 let posReady = false;
 let headingReady = false;
 
@@ -17,10 +19,9 @@ const statusEl = document.getElementById('status');
 const showBtn = document.getElementById('showBtn');
 const resetBtn = document.getElementById('resetBtn');
 
-
-
 function setStatus(s){ statusEl.textContent = s; }
 
+// calcola la destinazione a distanza "distanceMeters" e bearing "bearingDeg"
 function destLatLng(lat, lon, bearingDeg, distanceMeters){
   const R = 6378137;
   const brng = bearingDeg * Math.PI/180;
@@ -32,22 +33,26 @@ function destLatLng(lat, lon, bearingDeg, distanceMeters){
   return [lat2*180/Math.PI, lon2*180/Math.PI];
 }
 
+// aggiorna la linea in base a posizione e heading
 function updateLine(position, heading){
   const lat = position.coords.latitude;
   const lon = position.coords.longitude;
-  const distance = 200000000; // 20,000 km
+  const distance = 20000000; // 20,000 km
   const dest = destLatLng(lat, lon, heading, distance);
 
-  if (userMarker) userMarker.setLatLng([lat, lon]);
-  else userMarker = L.marker([lat, lon]).addTo(map);
+  // marker utente
+  if (!userMarker) userMarker = L.marker([lat, lon]).addTo(map);
+  else userMarker.setLatLng([lat, lon]);
 
-  if (headingLine) headingLine.setLatLngs([[lat, lon], dest]);
-  else headingLine = L.polyline([[lat, lon], dest], { color: 'red', weight: 4 }).addTo(map);
+  // linea
+  if (!headingLine) headingLine = L.polyline([[lat, lon], dest], { color: 'red', weight: 4 }).addTo(map);
+  else headingLine.setLatLngs([[lat, lon], dest]);
 
-  if (!map.getBounds().contains([lat, lon])) map.setView([lat, lon], 5);
+  // centra mappa solo la prima volta
+  if (!lineVisible && !lineLocked) map.setView([lat, lon], 16);
 }
 
-
+// richiede permessi bussola iOS
 async function requestDeviceOrientationPermission(){
   if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
     try {
@@ -57,65 +62,84 @@ async function requestDeviceOrientationPermission(){
       return false;
     }
   }
-  return true; // non-iOS or already allowed
+  return true; // non-iOS o già consentito
 }
 
+// gestione bussola
 function handleOrientationEvent(e){
-  // alpha is rotation around Z axis (degrees). Might need calibration per device.
-  let heading = e.alpha;
-  if (typeof heading !== 'number') return;
-  // adjust for screen orientation
+  let heading = null;
+
+  // iOS
+  if (typeof e.webkitCompassHeading === "number") {
+    heading = e.webkitCompassHeading;
+  } 
+  // Android / altri
+  else if (typeof e.alpha === "number") {
+    heading = e.alpha;
+  } 
+  else return;
+
   const screenAngle = (screen.orientation && screen.orientation.angle) || 0;
-  heading = -((heading - screenAngle + 360) % 360);
+  heading = (heading - screenAngle + 360) % 360;
+
   currentHeading = heading;
-  if (lastPos) updateLine(lastPos, heading);
+  headingReady = true;
+
+  if (posReady && !lineLocked) updateLine(lastPos, currentHeading);
 }
 
 function start() {
   startBtn.disabled = true;
   setStatus('Requesting permissions...');
-  // request orientation permission for iOS on user gesture
+
   requestDeviceOrientationPermission().then(ok=>{
     if (!ok) setStatus('Device orientation permission denied (compass may not work).');
-    else setStatus('Waiting for location & orientation...');
+    else setStatus('Waiting for position & orientation...');
+
     window.addEventListener('deviceorientation', handleOrientationEvent, true);
-    // watch position
+
     if (navigator.geolocation) {
       watchId = navigator.geolocation.watchPosition(pos=>{
         lastPos = pos;
+        posReady = true;
         setStatus('Position acquired. Move phone to set direction.');
-        // if we have an orientation event fired earlier, updateLine will run there
-        // but if no orientation yet, draw a small circle
-        if (!headingLine) {
+
+        if (!userMarker) {
           const lat = pos.coords.latitude, lon = pos.coords.longitude;
-          if (userMarker) userMarker.setLatLng([lat,lon]);
-          else userMarker = L.marker([lat,lon]).addTo(map);
-          map.setView([lat,lon], 16);
+          userMarker = L.marker([lat, lon]).addTo(map);
+          map.setView([lat, lon], 16);
         }
+
+        if (headingReady && !lineLocked) updateLine(lastPos, currentHeading);
+
       }, err=>{
         setStatus('Geolocation error: ' + err.message);
       }, { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 });
     } else {
       setStatus('Geolocation not supported.');
     }
+
+    showBtn.disabled = false;
+    resetBtn.disabled = false;
   });
-  showBtn.disabled = false;
-  resetBtn.disabled = false;
 }
 
-startBtn.addEventListener('click', start);
-
+// Mostra linea e la blocca
 showBtn.addEventListener('click', ()=>{
   if (!lastPos || currentHeading == null) {
     setStatus("Aspetto posizione & bussola…");
     return;
   }
   lineVisible = true;
+  lineLocked = true;
   updateLine(lastPos, currentHeading);
+  setStatus("Linea fissata sulla mappa.");
 });
 
+// Reset linea
 resetBtn.addEventListener('click', ()=>{
   lineVisible = false;
+  lineLocked = false;
   if (headingLine) {
     map.removeLayer(headingLine);
     headingLine = null;
@@ -123,8 +147,10 @@ resetBtn.addEventListener('click', ()=>{
   setStatus("Linea nascosta. Puoi premere 'Mostra linea' di nuovo.");
 });
 
+// start
+startBtn.addEventListener('click', start);
 
-// cleanup if needed
+// cleanup
 window.addEventListener('beforeunload', ()=> {
   if (watchId) navigator.geolocation.clearWatch(watchId);
   window.removeEventListener('deviceorientation', handleOrientationEvent);
