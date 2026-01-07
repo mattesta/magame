@@ -59,26 +59,13 @@ async function requestDeviceOrientationPermission(){
 }
 
 function handleOrientationEvent(e){
-
-  let heading;
-
-  // iOS: preferisci webkitCompassHeading (0 = Nord)
-  if (typeof e.webkitCompassHeading === "number") {
-    heading = e.webkitCompassHeading; 
-  } 
-  // altri device
-  else if (typeof e.alpha === "number") {
-    heading = 360 - e.alpha;  // invert to match compass feel
-  } 
-  else return;
-
-  heading = (heading + 360) % 360;
-
-  currentHeading = heading;
-
-  if (lastPos && lineVisible) {
-    updateLine(lastPos, currentHeading);
-  }
+  // alpha is rotation around Z axis (degrees). Might need calibration per device.
+  let heading = -e.alpha;
+  if (typeof heading !== 'number') return;
+  // adjust for screen orientation
+  const screenAngle = (screen.orientation && screen.orientation.angle) || 0;
+  heading = (heading - screenAngle + 360) % 360;
+  if (lastPos) updateLine(lastPos, heading);
 }
 
 function start() {
