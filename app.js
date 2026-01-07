@@ -32,7 +32,7 @@ function updateLine(position, heading){
   if (userMarker) userMarker.setLatLng([lat, lon]);
   else userMarker = L.marker([lat, lon]).addTo(map);
   if (headingLine) headingLine.setLatLngs([[lat, lon], dest]);
-  else headingLine = L.polyline([[lat, lon], dest], { color: 'red', weight: 4 }).addTo(map);
+  else headingLine = L.polyline([[lat, lon], dest], { color: 'red', weight: 2 }).addTo(map);
   if (!map.getBounds().contains([lat, lon])) map.setView([lat, lon], 16);
 }
 
