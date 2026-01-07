@@ -4,11 +4,14 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 }).addTo(map);
 
 let userMarker = null;
-let headingLine = null;
+let staticLine = null;
 let watchId = null;
-let lastPos = null;
+let lastPos = null;        // current live position
+let snapshotPos = null;    // fixed start pos for created line
+let lastHeading = null;    // most recent heading value
 
 const startBtn = document.getElementById('startBtn');
+const createBtn = document.getElementById('createBtn');
 const statusEl = document.getElementById('status');
 
 function setStatus(s){ statusEl.textContent = s; }
@@ -24,15 +27,12 @@ function destLatLng(lat, lon, bearingDeg, distanceMeters){
   return [lat2*180/Math.PI, lon2*180/Math.PI];
 }
 
-function updateLine(position, heading){
+// Update live marker only (line is static once created)
+function updateMarker(position){
   const lat = position.coords.latitude;
   const lon = position.coords.longitude;
-  const distance = 2000; // meters: adjust line length
-  const dest = destLatLng(lat, lon, heading, distance);
   if (userMarker) userMarker.setLatLng([lat, lon]);
   else userMarker = L.marker([lat, lon]).addTo(map);
-  if (headingLine) headingLine.setLatLngs([[lat, lon], dest]);
-  else headingLine = L.polyline([[lat, lon], dest], { color: 'red', weight: 4 }).addTo(map);
   if (!map.getBounds().contains([lat, lon])) map.setView([lat, lon], 16);
 }
 
@@ -45,52 +45,68 @@ async function requestDeviceOrientationPermission(){
       return false;
     }
   }
-  return true; // non-iOS or already allowed
+  return true;
 }
 
 function handleOrientationEvent(e){
-  // alpha is rotation around Z axis (degrees). Might need calibration per device.
   let heading = e.alpha;
   if (typeof heading !== 'number') return;
-  // adjust for screen orientation
   const screenAngle = (screen.orientation && screen.orientation.angle) || 0;
   heading = (heading - screenAngle + 360) % 360;
-  if (lastPos) updateLine(lastPos, heading);
+  lastHeading = heading;
+  // update HUD with heading but do NOT move any existing line
+  setStatus('Heading: ' + Math.round(heading) + '°' + (lastPos ? ' • position available' : ''));
 }
 
-function start() {
+function createLine(){
+  if (!lastHeading) { setStatus('No heading available. Press Enable Compass and orient phone.'); return; }
+  const pos = snapshotPos || lastPos;
+  if (!pos) { setStatus('No position available. Allow location and try again.'); return; }
+  // snapshot the start so the line does NOT move afterwards
+  snapshotPos = { coords: { latitude: pos.coords.latitude, longitude: pos.coords.longitude } };
+  const lat = snapshotPos.coords.latitude;
+  const lon = snapshotPos.coords.longitude;
+  const distance = 20000000; // 20,000 km - very long
+  const dest = destLatLng(lat, lon, lastHeading, distance);
+  if (staticLine) map.removeLayer(staticLine);
+  staticLine = L.polyline([[lat, lon], dest], { color: 'red', weight: 4, opacity: 0.9 }).addTo(map);
+  setStatus('Line created at ' + Math.round(lastHeading) + '°');
+  // keep marker live but do not alter the created line after this
+}
+
+function startOrientation(){
   startBtn.disabled = true;
-  setStatus('Requesting permissions...');
-  // request orientation permission for iOS on user gesture
+  setStatus('Requesting compass permission...');
   requestDeviceOrientationPermission().then(ok=>{
-    if (!ok) setStatus('Device orientation permission denied (compass may not work).');
-    else setStatus('Waiting for location & orientation...');
+    if (!ok) setStatus('Compass permission denied; heading may not work.');
+    else setStatus('Compass enabled; rotate phone then press "Create Line".');
     window.addEventListener('deviceorientation', handleOrientationEvent, true);
-    // watch position
-    if (navigator.geolocation) {
-      watchId = navigator.geolocation.watchPosition(pos=>{
-        lastPos = pos;
-        setStatus('Position acquired. Move phone to set direction.');
-        // if we have an orientation event fired earlier, updateLine will run there
-        // but if no orientation yet, draw a small circle
-        if (!headingLine) {
-          const lat = pos.coords.latitude, lon = pos.coords.longitude;
-          if (userMarker) userMarker.setLatLng([lat,lon]);
-          else userMarker = L.marker([lat,lon]).addTo(map);
-          map.setView([lat,lon], 16);
-        }
-      }, err=>{
-        setStatus('Geolocation error: ' + err.message);
-      }, { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 });
-    } else {
-      setStatus('Geolocation not supported.');
-    }
   });
 }
 
-startBtn.addEventListener('click', start);
+// request and show location on load
+if (navigator.geolocation) {
+  navigator.geolocation.getCurrentPosition(pos=>{
+    lastPos = pos;
+    updateMarker(pos);
+    setStatus('Position acquired. Press "Enable Compass" to allow heading.');
+    // start watching to keep marker live (optional)
+    watchId = navigator.geolocation.watchPosition(p=>{
+      lastPos = p;
+      updateMarker(p);
+    }, err=>{
+      console.warn('watchPosition error', err);
+    }, { enableHighAccuracy: true, maximumAge: 1000 });
+  }, err=>{
+    setStatus('Geolocation error: ' + err.message);
+  }, { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 });
+} else {
+  setStatus('Geolocation not supported.');
+}
 
-// cleanup if needed
+startBtn.addEventListener('click', startOrientation);
+createBtn.addEventListener('click', createLine);
+
 window.addEventListener('beforeunload', ()=> {
   if (watchId) navigator.geolocation.clearWatch(watchId);
   window.removeEventListener('deviceorientation', handleOrientationEvent);
