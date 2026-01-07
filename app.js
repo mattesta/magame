@@ -56,7 +56,7 @@ function handleOrientationEvent(e){
   // adjust for screen orientation
   const screenAngle = (screen.orientation && screen.orientation.angle) || 0;
   heading = - ((heading - screenAngle + 360) % 360);
-  currentHeading = heading; // salva l'heading corrente
+  //currentHeading = heading; // salva l'heading corrente
 
   if (lastPos) updateLine(lastPos, heading);
 }
