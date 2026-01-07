@@ -1,4 +1,7 @@
-const map = L.map('map', { zoomControl: true });
+const map = L.map('map', { 
+  zoomControl: true,
+  worldCopyJump: true,
+});
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19, attribution: '&copy; OpenStreetMap'
 }).addTo(map);
@@ -56,13 +59,20 @@ async function requestDeviceOrientationPermission(){
 }
 
 function handleOrientationEvent(e){
-  let heading = e.alpha;
-  if (typeof heading !== 'number') return;
 
-  const screenAngle = (screen.orientation && screen.orientation.angle) || 0;
+  let heading;
 
-  // invert direction
-  heading = (-heading - screenAngle + 360) % 360;
+  // iOS: preferisci webkitCompassHeading (0 = Nord)
+  if (typeof e.webkitCompassHeading === "number") {
+    heading = e.webkitCompassHeading; 
+  } 
+  // altri device
+  else if (typeof e.alpha === "number") {
+    heading = 360 - e.alpha;  // invert to match compass feel
+  } 
+  else return;
+
+  heading = (heading + 360) % 360;
 
   currentHeading = heading;
 
