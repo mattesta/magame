@@ -24,11 +24,13 @@ function destLatLng(lat, lon, bearingDeg, distanceMeters){
   return [lat2*180/Math.PI, lon2*180/Math.PI];
 }
 
-function greatCirclePoints(lat, lon, bearingDeg, distanceMeters, steps = 500){
+function greatCirclePoints(lat, lon, bearing, distance, steps){
   const points = [];
   for (let i = 0; i <= steps; i++) {
-    const d = distanceMeters * (i / steps);
-    points.push(destLatLng(lat, lon, bearingDeg, d));
+    const t = i / steps;
+    const f = t * t; // ease-in
+    const d = distance * f;
+    points.push(destLatLng(lat, lon, bearing, d));
   }
   return points;
 }
@@ -36,7 +38,7 @@ function greatCirclePoints(lat, lon, bearingDeg, distanceMeters, steps = 500){
 function updateLine(position, heading){
   const lat = position.coords.latitude;
   const lon = position.coords.longitude;
-  const distance = 4000000; // prova 2.000 km
+  const distance = 6000000; // prova 2.000 km
   const points = greatCirclePoints(lat, lon, heading, distance, 120);
   if (userMarker) userMarker.setLatLng([lat, lon]);
   else userMarker = L.marker([lat, lon]).addTo(map);
