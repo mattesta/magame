@@ -24,15 +24,24 @@ function destLatLng(lat, lon, bearingDeg, distanceMeters){
   return [lat2*180/Math.PI, lon2*180/Math.PI];
 }
 
+function greatCirclePoints(lat, lon, bearingDeg, distanceMeters, steps = 100){
+  const points = [];
+  for (let i = 0; i <= steps; i++) {
+    const d = distanceMeters * (i / steps);
+    points.push(destLatLng(lat, lon, bearingDeg, d));
+  }
+  return points;
+}
+
 function updateLine(position, heading){
   const lat = position.coords.latitude;
   const lon = position.coords.longitude;
-  const distance = 2000; // meters: adjust line length
-  const dest = destLatLng(lat, lon, heading, distance);
+  const distance = 2000000; // prova 2.000 km
+  const points = greatCirclePoints(lat, lon, heading, distance, 120);
   if (userMarker) userMarker.setLatLng([lat, lon]);
   else userMarker = L.marker([lat, lon]).addTo(map);
-  if (headingLine) headingLine.setLatLngs([[lat, lon], dest]);
-  else headingLine = L.polyline([[lat, lon], dest], { color: 'red', weight: 2 }).addTo(map);
+  if (headingLine) headingLine.setLatLngs(points);
+  else headingLine = L.polyline(points, { color: 'red', weight: 2 }).addTo(map);
   if (!map.getBounds().contains([lat, lon])) map.setView([lat, lon], 16);
 }
 
