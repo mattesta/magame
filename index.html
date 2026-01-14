@@ -10,10 +10,17 @@
 <body>
   <div id="map"></div>
   <div id="hud">
-    <button id="showLineBtn" disabled>Mostra linea</button>
-    <button id="resetBtn" disabled>Reset</button>
+    <!-- Barra di ricerca -->
+    <input id="searchBox" placeholder="Cerca una città..." />
+    <button id="searchBtn">Cerca</button>
+
+    <!-- Controlli della linea e permessi -->
     <button id="startBtn">Start (ask permissions)</button>
-    <div id="status">Good luck!</div>
+    <button id="showLineBtn" disabled>Show line</button>
+    <button id="resetBtn" disabled>Reset</button>
+    
+    <!-- Messaggi di stato -->
+    <div id="status">Buona fortuna</div>
   </div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="app.js"></script>
