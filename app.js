@@ -15,13 +15,15 @@ let targetMarker = null;
 let targetLatLng = null;
 
 const startBtn = document.getElementById('startBtn');
-const statusEl = document.getElementById('status');
 const showLineBtn = document.getElementById('showLineBtn');
+const resetBtn = document.getElementById('resetBtn');
 const searchBtn = document.getElementById('searchBtn');
 const searchBox = document.getElementById('searchBox');
+const statusEl = document.getElementById('status');
 
-function setStatus(s){ statusEl.textContent = s; }
+function setStatus(s) { statusEl.textContent = s; }
 
+// calcola nuova posizione partendo da lat, lon, bearing e distanza
 function destLatLng(lat, lon, bearingDeg, distanceMeters){
   const R = 6378137;
   const brng = bearingDeg * Math.PI/180;
@@ -33,30 +35,34 @@ function destLatLng(lat, lon, bearingDeg, distanceMeters){
   return [lat2*180/Math.PI, lon2*180/Math.PI];
 }
 
+// genera punti lungo la grande circonferenza, con cubic easing per maggiore curvatura visibile
 function greatCirclePoints(lat, lon, bearing, distance, steps){
   const points = [];
   for (let i = 0; i <= steps; i++) {
     const t = i / steps;
-    const f = t * t * t; // cubic ease-in
+    const f = t*t*t; // cubic ease-in
     const d = distance * f;
     points.push(destLatLng(lat, lon, bearing, d));
   }
   return points;
 }
 
+// aggiorna la linea in movimento (solo se lineVisible e non bloccata)
 function updateLine(position, heading){
-  if (!lineVisible) return;
-  if (lineLocked) return;
+  if (!lineVisible || lineLocked) return;
   const lat = position.coords.latitude;
   const lon = position.coords.longitude;
-  const distance = 10000000; // prova 2.000 km
+  const distance = 10000000; // 10.000 km
   const points = greatCirclePoints(lat, lon, heading, distance, 120);
+
   if (userMarker) userMarker.setLatLng([lat, lon]);
   else userMarker = L.marker([lat, lon]).addTo(map);
+
   if (headingLine) headingLine.setLatLngs(points);
   else headingLine = L.polyline(points, { color: 'red', weight: 2 }).addTo(map);
 }
 
+// richiesta permesso per bussola su iOS
 async function requestDeviceOrientationPermission(){
   if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
     try {
@@ -66,21 +72,23 @@ async function requestDeviceOrientationPermission(){
       return false;
     }
   }
-  return true; // non-iOS or already allowed
+  return true;
 }
 
+// calcola distanza tra due punti sulla sfera
 function distance(lat1, lon1, lat2, lon2){
   const R = 6378137;
   const dLat = (lat2-lat1)*Math.PI/180;
   const dLon = (lon2-lon1)*Math.PI/180;
-  const a =
-    Math.sin(dLat/2)**2 +
-    Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180) *
-    Math.sin(dLon/2)**2;
+  const a = Math.sin(dLat/2)**2 +
+            Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180) *
+            Math.sin(dLon/2)**2;
   return 2*R*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
+// distanza minima di un punto dalla linea
 function distanceToLine(point, linePoints){
+  if (!point || !linePoints) return null;
   let min = Infinity;
   for (const [lat, lon] of linePoints){
     const d = distance(point[0], point[1], lat, lon);
@@ -89,41 +97,51 @@ function distanceToLine(point, linePoints){
   return min;
 }
 
+// aggiorna la distanza del target dalla linea
+function updateDistanceToTarget() {
+  if (!targetLatLng || !lockedPoints) return;
+  const d = distanceToLine(targetLatLng, lockedPoints);
+  setStatus(`Distanza dalla rotta: ${(d/1000).toFixed(1)} km`);
+}
+
+// gestione evento bussola
 function handleOrientationEvent(e){
-  // alpha is rotation around Z axis (degrees). Might need calibration per device.
-  let heading = null;
-  heading = e.webkitCompassHeading;
+  let heading = e.webkitCompassHeading || e.alpha; // alpha fallback
   if (typeof heading !== 'number') return;
-  // adjust for screen orientation
   const screenAngle = (screen.orientation && screen.orientation.angle) || 0;
   heading = ((heading - screenAngle + 360) % 360);
   lastHeading = heading;
-  // if (heading === null) return; // togliere?
   if (lastPos && lineVisible && !lineLocked) {
     updateLine(lastPos, heading);
   }
 }
 
+// avvio del tracking
 function start() {
   startBtn.disabled = true;
   setStatus('Requesting permissions...');
-  // request orientation permission for iOS on user gesture
+
   requestDeviceOrientationPermission().then(ok=>{
     if (!ok) setStatus('Device orientation permission denied (compass may not work).');
     else setStatus('Waiting for location & orientation...');
+
     window.addEventListener('deviceorientation', handleOrientationEvent, true);
-    // watch position
+
     if (navigator.geolocation) {
       watchId = navigator.geolocation.watchPosition(pos=>{
         lastPos = pos;
         setStatus('Position acquired. Move phone to set direction.');
-        // if we have an orientation event fired earlier, updateLine will run there
-        // but if no orientation yet, draw a small circle
+
+        // abilita i pulsanti quando la posizione è pronta
+        showLineBtn.disabled = false;
+        resetBtn.disabled = false;
+
         if (!headingLine) {
-          const lat = pos.coords.latitude, lon = pos.coords.longitude;
-          if (userMarker) userMarker.setLatLng([lat,lon]);
-          else userMarker = L.marker([lat,lon]).addTo(map);
-          map.setView([lat,lon], 16);
+          const lat = pos.coords.latitude;
+          const lon = pos.coords.longitude;
+          if (userMarker) userMarker.setLatLng([lat, lon]);
+          else userMarker = L.marker([lat, lon]).addTo(map);
+          map.setView([lat, lon], 16);
         }
       }, err=>{
         setStatus('Geolocation error: ' + err.message);
@@ -136,8 +154,9 @@ function start() {
 
 startBtn.addEventListener('click', start);
 
+// mostra linea fissata
 showLineBtn.addEventListener('click', () => {
-  if (!lastPos) return;
+  if (!lastPos || lastHeading === null) return;
 
   lineVisible = true;
   lineLocked = true;
@@ -148,21 +167,28 @@ showLineBtn.addEventListener('click', () => {
   const points = greatCirclePoints(lat, lon, lastHeading, 10000000, 120);
   lockedPoints = points;
 
-  if (headingLine) {
-    headingLine.setLatLngs(points);
-  } else {
-    headingLine = L.polyline(points, { color: 'red', weight: 3 }).addTo(map);
-  }
+  if (headingLine) headingLine.setLatLngs(points);
+  else headingLine = L.polyline(points, { color: 'red', weight: 3 }).addTo(map);
 
   setStatus('Linea fissata');
+
+  // aggiorna distanza se target già selezionato
+  updateDistanceToTarget();
 });
 
-// cleanup if needed
-window.addEventListener('beforeunload', ()=> {
-  if (watchId) navigator.geolocation.clearWatch(watchId);
-  window.removeEventListener('deviceorientation', handleOrientationEvent);
+// reset linea
+resetBtn.addEventListener('click', () => {
+  if (headingLine) {
+    map.removeLayer(headingLine);
+    headingLine = null;
+  }
+  lineLocked = false;
+  lockedPoints = null;
+  lineVisible = false;
+  setStatus('Linea nascosta. Premi "Mostra linea" per fissarla di nuovo.');
 });
 
+// ricerca target
 searchBtn.addEventListener('click', async () => {
   const q = searchBox.value;
   if (!q) return;
@@ -178,10 +204,16 @@ searchBtn.addEventListener('click', async () => {
   targetLatLng = [lat, lon];
 
   if (targetMarker) targetMarker.setLatLng(targetLatLng);
-  else targetMarker = L.marker(targetLatLng).addTo(map);
+  else targetMarker = L.marker(targetLatLng, { color: 'blue' }).addTo(map);
 
   map.panTo(targetLatLng);
+
+  // aggiorna distanza se linea fissata
+  updateDistanceToTarget();
 });
 
-const d = distanceToLine(targetLatLng, lockedPoints);
-setStatus(`Distanza dalla rotta: ${(d/1000).toFixed(1)} km`);
+// cleanup on unload
+window.addEventListener('beforeunload', ()=> {
+  if (watchId) navigator.geolocation.clearWatch(watchId);
+  window.removeEventListener('deviceorientation', handleOrientationEvent);
+});
