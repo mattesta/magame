@@ -206,7 +206,7 @@ searchBtn.addEventListener('click', async () => {
   if (targetMarker) targetMarker.setLatLng(targetLatLng);
   else targetMarker = L.marker(targetLatLng, { color: 'blue' }).addTo(map);
 
-  map.panTo(targetLatLng);
+  //map.panTo(targetLatLng);
 
   // aggiorna distanza se linea fissata
   updateDistanceToTarget();
