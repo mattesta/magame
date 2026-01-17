@@ -7,3 +7,23 @@ html,body,#map{ height:100%; margin:0; padding:0; }
 }
 #startBtn{ padding:8px 10px; margin-bottom:6px; }
 #status{ font-size:13px; }
+#suggestions {
+  position: absolute;
+  background: white;
+  border: 1px solid #ccc;
+  z-index: 1000;
+  max-height: 180px;
+  overflow-y: auto;
+  display: none;
+  width: 100%;
+}
+
+.suggestion {
+  padding: 6px 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.suggestion:hover {
+  background: #f0f0f0;
+}
