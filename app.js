@@ -13,9 +13,7 @@ let lockedPoints = null;
 let lastHeading = null;
 let targetMarker = null;
 let targetLatLng = null;
-
-let movingLine = null;   // linea che segue il telefono
-let lockedLine = null;   // linea fissata
+let searchTimeout = null;
 
 const startBtn = document.getElementById('startBtn');
 const showLineBtn = document.getElementById('showLineBtn');
@@ -23,6 +21,7 @@ const resetBtn = document.getElementById('resetBtn');
 const searchBtn = document.getElementById('searchBtn');
 const searchBox = document.getElementById('searchBox');
 const statusEl = document.getElementById('status');
+const suggestionsEl = document.getElementById('suggestions');
 
 function setStatus(s) { statusEl.textContent = s; }
 
@@ -52,7 +51,7 @@ function greatCirclePoints(lat, lon, bearing, distance, steps){
 
 // aggiorna la linea in movimento (solo se lineVisible e non bloccata)
 function updateLine(position, heading){
-  if (!lineVisible) return;
+  if (!lineVisible || lineLocked) return;
   const lat = position.coords.latitude;
   const lon = position.coords.longitude;
   const distance = 10000000; // 10.000 km
@@ -77,6 +76,18 @@ async function requestDeviceOrientationPermission(){
   }
   return true;
 }
+
+async function fetchSuggestions(query) {
+  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`;
+
+  const res = await fetch(url, {
+    headers: { 'Accept-Language': 'it' }
+  });
+  const data = await res.json();
+
+  showSuggestions(data);
+}
+
 
 // calcola distanza tra due punti sulla sfera
 function distance(lat1, lon1, lat2, lon2){
@@ -155,11 +166,60 @@ function start() {
   });
 }
 
+function showSuggestions(results) {
+  suggestionsEl.innerHTML = '';
+
+  if (!results.length) {
+    suggestionsEl.style.display = 'none';
+    return;
+  }
+
+  results.forEach(r => {
+    const div = document.createElement('div');
+    div.className = 'suggestion';
+    div.textContent = r.display_name;
+
+    div.addEventListener('click', () => {
+      selectSuggestion(r);
+    });
+
+    suggestionsEl.appendChild(div);
+  });
+
+  suggestionsEl.style.display = 'block';
+}
+
+function selectSuggestion(r) {
+  const lat = parseFloat(r.lat);
+  const lon = parseFloat(r.lon);
+
+  targetLatLng = [lat, lon];
+  searchBox.value = r.display_name;
+  suggestionsEl.style.display = 'none';
+
+  if (targetMarker) targetMarker.setLatLng(targetLatLng);
+  else targetMarker = L.marker(targetLatLng).addTo(map);
+
+  map.panTo(targetLatLng);
+
+  updateDistanceToTarget();
+}
+
+document.addEventListener('click', (e) => {
+  if (!searchBox.contains(e.target) && !suggestionsEl.contains(e.target)) {
+    suggestionsEl.style.display = 'none';
+  }
+});
+
+
 startBtn.addEventListener('click', start);
 
 // mostra linea fissata
 showLineBtn.addEventListener('click', () => {
   if (!lastPos || lastHeading === null) return;
+
+  lineVisible = true;
+  lineLocked = true;
 
   const lat = lastPos.coords.latitude;
   const lon = lastPos.coords.longitude;
@@ -167,19 +227,12 @@ showLineBtn.addEventListener('click', () => {
   const points = greatCirclePoints(lat, lon, lastHeading, 10000000, 120);
   lockedPoints = points;
 
-  if (lockedLine) lockedLine.setLatLngs(points);
-  else lockedLine = L.polyline(points, { color: 'red', weight: 3 }).addTo(map);
-
-  // rimuovo la linea in movimento
-  if (movingLine) {
-    map.removeLayer(movingLine);
-    movingLine = null;
-  }
-
-  lineVisible = false;   // la linea in movimento non deve più apparire
-  lineLocked = true;
+  if (headingLine) headingLine.setLatLngs(points);
+  else headingLine = L.polyline(points, { color: 'red', weight: 3 }).addTo(map);
 
   setStatus('Linea fissata');
+
+  // aggiorna distanza se target già selezionato
   updateDistanceToTarget();
 });
 
@@ -224,3 +277,17 @@ window.addEventListener('beforeunload', ()=> {
   if (watchId) navigator.geolocation.clearWatch(watchId);
   window.removeEventListener('deviceorientation', handleOrientationEvent);
 });
+
+searchBox.addEventListener('input', () => {
+  const q = searchBox.value.trim();
+
+  clearTimeout(searchTimeout);
+
+  if (q.length < 3) {
+    suggestionsEl.style.display = 'none';
+    return;
+  }
+
+  searchTimeout = setTimeout(() => fetchSuggestions(q), 300);
+});
+
