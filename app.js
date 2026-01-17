@@ -200,7 +200,7 @@ function selectSuggestion(r) {
   if (targetMarker) targetMarker.setLatLng(targetLatLng);
   else targetMarker = L.marker(targetLatLng).addTo(map);
 
-  map.panTo(targetLatLng);
+  //map.panTo(targetLatLng);
 
   updateDistanceToTarget();
 }
