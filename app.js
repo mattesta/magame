@@ -203,9 +203,10 @@ function selectSuggestion(r) {
   if (targetMarker) targetMarker.setLatLng(targetLatLng);
   else targetMarker = L.marker(targetLatLng).addTo(map);
 
-  //map.panTo(targetLatLng);
-
   updateDistanceToTarget();
+
+  restoreMapView();
+  searchBox.blur();
 }
 
 function restoreMapView() {
@@ -297,6 +298,12 @@ searchBox.addEventListener('input', () => {
     return;
   }
 
+  searchTimeout = setTimeout(() => {
+    fetchSuggestions(q);
+  }, 300);
+});
+
+
 searchBox.addEventListener('focus', () => {
   mapZoomBeforeSearch = map.getZoom();
   mapCenterBeforeSearch = map.getCenter();
@@ -315,7 +322,5 @@ div.addEventListener('click', () => {
   searchTimeout = setTimeout(() => fetchSuggestions(q), 300);
 });
 
-restoreMapView();
-searchBox.blur();
 
 
